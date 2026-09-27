@@ -1,0 +1,12 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+
+// After this period since startup, try to connect as wifi client. This is
+// to make sure it is not too frequent after a reset, so the router lease is
+// updated.
+#define AP_MODE_TIMEOUT_S 30
+
+
+
+#endif
