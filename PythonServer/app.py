@@ -5,7 +5,8 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, ses
 
 from config import ADMIN_EMAIL, DEVICE_KEY, PORT
 from gmail_auth import oauth, save_token
-from mail_checker import check_unread, get_responses, get_senders, save_responses, save_senders
+from mail_checker import (check_unread, get_notified, get_responses, get_senders, save_notified,
+                          save_responses, save_senders, send_mail)
 
 app = Flask(__name__)
 app.secret_key = DEVICE_KEY  # stable across processes, so the OAuth session survives under CGI
@@ -25,7 +26,7 @@ def home():
     try:
         status = check_unread()
     except Exception as e:
-        status = {"beep": False, "message": "Could not check mail", "error": str(e)}
+        status = {"message": "Could not check mail", "error": str(e)}
     return render_template("home.html", email=email, status=status)
 
 
@@ -56,9 +57,32 @@ def check():
         return jsonify({"error": "unauthorized"}), 401
 
     try:
-        return jsonify(check_unread())
+        status = check_unread()
     except Exception as e:
         return jsonify({"beep": False, "message": "Server error", "error": str(e)}), 503
+
+    # Beep only for unread mail the ESP was not told about in a previous reply
+    ids = status.pop("ids")
+    status["beep"] = bool(set(ids) - set(get_notified()))
+    save_notified(ids)
+    return jsonify(status)
+
+
+@app.route("/send", methods=["POST"])
+def send():
+    key = request.headers.get("X-Api-Key", "")
+    if not secrets.compare_digest(key, DEVICE_KEY):
+        return jsonify({"error": "unauthorized"}), 401
+
+    to, text = request.form.get("to", "").strip(), request.form.get("text", "").strip()
+    if not to or not text:
+        return jsonify({"error": "'to' and 'text' are required"}), 400
+
+    try:
+        send_mail(to, text)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 503
+    return jsonify({"ok": True})
 
 
 @app.route("/authorize")

@@ -2,7 +2,7 @@
 {% block title %}Mail · Mail Notify{% endblock %}
 {% block content %}
 <section class="access-card" aria-labelledby="status-heading">
-    <div class="access-icon"><i class="fa-solid {{ 'fa-envelope' if status.beep else 'fa-inbox' }}" aria-hidden="true"></i></div>
+    <div class="access-icon"><i class="fa-solid {{ 'fa-envelope' if status.ids else 'fa-inbox' }}" aria-hidden="true"></i></div>
     <div class="access-content">
         <h2 id="status-heading">{{ status.message }}</h2>
         {% if status.error %}<p>{{ status.error }}</p>{% endif %}

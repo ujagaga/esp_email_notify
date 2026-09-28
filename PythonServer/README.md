@@ -30,4 +30,17 @@ Response:
 {"beep": true, "message": "New mail - Alice: Meeting notes", "responses": ["On my way", "Call you later"]}
 ```
 
-`responses` (edited on the `/config` page) is only present when there is new mail.
+`beep` is `true` only when the reply contains unread mail that was not in the
+previous `/check` reply, so the ESP beeps once per new message. `responses`
+(edited on the `/config` page) is only present when there is unread mail.
+
+`POST /send`, header `X-Api-Key: <device_key>`, form fields `to` (recipient
+address) and `text` (used as both subject and body). Sends from the
+`ADMIN_EMAIL` Gmail account.
+
+```bash
+curl -H "X-Api-Key: <device_key>" --data-urlencode "to=alice@example.com" \
+     --data-urlencode "text=On my way" <server-url>/send
+```
+
+Response: `{"ok": true}`, or `{"error": "..."}` with status 400/401/503.

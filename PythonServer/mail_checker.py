@@ -1,5 +1,7 @@
+import base64
 import json
 import os.path
+from email.message import EmailMessage
 
 import requests
 
@@ -9,6 +11,7 @@ from gmail_auth import get_access_token
 GMAIL_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
 SENDERS_FILE = os.path.join(os.path.dirname(__file__), "senders.json")
 RESPONSES_FILE = os.path.join(os.path.dirname(__file__), "responses.json")
+NOTIFIED_FILE = os.path.join(os.path.dirname(__file__), "notified.json")  # message ids the ESP was last told about
 
 
 def _load(path, default):
@@ -39,6 +42,14 @@ def save_responses(responses):
     _save(RESPONSES_FILE, responses)
 
 
+def get_notified():
+    return _load(NOTIFIED_FILE, [])
+
+
+def save_notified(ids):
+    _save(NOTIFIED_FILE, ids)
+
+
 def check_unread():
     headers = {"Authorization": f"Bearer {get_access_token()}"}
     sender_query = " OR ".join(f"from:{s}" for s in get_senders())
@@ -49,7 +60,7 @@ def check_unread():
     messages = resp.json().get("messages", [])
 
     if not messages:
-        return {"beep": False, "message": "No new mail"}
+        return {"message": "No new mail", "ids": []}
 
     resp = requests.get(f"{GMAIL_URL}/{messages[0]['id']}", headers=headers, params={
         "format": "metadata", "metadataHeaders": ["From", "Subject"]
@@ -67,4 +78,17 @@ def check_unread():
     count = len(messages)
     prefix = f"{count} new" if count > 1 else "New mail"
 
-    return {"beep": True, "message": f"{prefix} - {sender}: {subject}", "responses": get_responses()}
+    return {"message": f"{prefix} - {sender}: {subject}", "responses": get_responses(),
+            "ids": [m["id"] for m in messages]}
+
+
+def send_mail(to, text):
+    msg = EmailMessage()
+    msg["To"] = to
+    msg["Subject"] = text
+    msg.set_content(text)
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+
+    resp = requests.post(f"{GMAIL_URL}/send", headers={"Authorization": f"Bearer {get_access_token()}"},
+                         json={"raw": raw})
+    resp.raise_for_status()

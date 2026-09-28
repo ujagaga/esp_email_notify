@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 senders.json
 responses.json
+notified.json
