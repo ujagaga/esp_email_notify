@@ -9,6 +9,7 @@ from a piezo speaker.
 - ESP8266 D1 mini
 - Nokia 5110 LCD module (PCD8544 controller, 84x48 pixels)
 - Piezo speaker (passive buzzer)
+- 2x push button
 - Breadboard + jumper wires
 - 330 Ω resistor (LCD backlight, optional)
 
@@ -30,7 +31,15 @@ from a piezo speaker.
 | +             | D6          | GPIO12 |                   |
 | -             | G           | -      |                   |
 
-Free pins for later use: D0, D3, D4, RX, TX, A0.
+| Push button | D1 mini pin | GPIO   | Notes                                |
+|-------------|-------------|--------|----------------------------------------|
+| Button 1    | D3          | GPIO0  | Other leg to GND, use internal pull-up |
+| Button 2    | D4          | GPIO2  | Other leg to GND, use internal pull-up |
+
+Don't hold either button pressed while the board powers up or resets: GPIO0
+low selects flash mode and GPIO2 must be high at boot.
+
+Free pins for later use: D0, RX, TX, A0.
 
 ## Schematic
 
@@ -46,6 +55,10 @@ Free pins for later use: D0, D3, D4, RX, TX, A0.
   | CE   --------- D8  (D1 mini)
   | BL   --------- 3V3 (D1 mini, via 330R)
   `-------------'
+
+  Push buttons (other leg of each to GND, internal pull-up)
+  Button 1 ---- D3 (D1 mini)
+  Button 2 ---- D4 (D1 mini)
 ```
 
 ## Planned behaviour
