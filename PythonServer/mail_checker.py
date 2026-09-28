@@ -1,22 +1,61 @@
+import json
+import os.path
+
+import requests
+
 from config import SENDERS
-from gmail_auth import get_gmail_service
+from gmail_auth import get_access_token
+
+GMAIL_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+SENDERS_FILE = os.path.join(os.path.dirname(__file__), "senders.json")
+RESPONSES_FILE = os.path.join(os.path.dirname(__file__), "responses.json")
+
+
+def _load(path, default):
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return default
+
+
+def _save(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def get_senders():
+    return _load(SENDERS_FILE, SENDERS)
+
+
+def save_senders(senders):
+    _save(SENDERS_FILE, senders)
+
+
+def get_responses():
+    return _load(RESPONSES_FILE, [])
+
+
+def save_responses(responses):
+    _save(RESPONSES_FILE, responses)
 
 
 def check_unread():
-    service = get_gmail_service()
-    sender_query = " OR ".join(f"from:{s}" for s in SENDERS)
+    headers = {"Authorization": f"Bearer {get_access_token()}"}
+    sender_query = " OR ".join(f"from:{s}" for s in get_senders())
     query = f"is:unread ({sender_query})"
 
-    result = service.users().messages().list(userId="me", q=query, maxResults=10).execute()
-    messages = result.get("messages", [])
+    resp = requests.get(GMAIL_URL, headers=headers, params={"q": query, "maxResults": 10})
+    resp.raise_for_status()
+    messages = resp.json().get("messages", [])
 
     if not messages:
         return {"beep": False, "message": "No new mail"}
 
-    latest = service.users().messages().get(
-        userId="me", id=messages[0]["id"], format="metadata",
-        metadataHeaders=["From", "Subject"]
-    ).execute()
+    resp = requests.get(f"{GMAIL_URL}/{messages[0]['id']}", headers=headers, params={
+        "format": "metadata", "metadataHeaders": ["From", "Subject"]
+    })
+    resp.raise_for_status()
+    latest = resp.json()
 
     headers = {h["name"]: h["value"] for h in latest["payload"]["headers"]}
     sender = headers.get("From", "Unknown")
@@ -28,4 +67,4 @@ def check_unread():
     count = len(messages)
     prefix = f"{count} new" if count > 1 else "New mail"
 
-    return {"beep": True, "message": f"{prefix} - {sender}: {subject}"}
+    return {"beep": True, "message": f"{prefix} - {sender}: {subject}", "responses": get_responses()}

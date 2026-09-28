@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Configuration · Mail Notify{% endblock %}
+{% block content %}
+<section class="panel parameters">
+    <h2>Senders to watch for</h2>
+    <p class="muted">One email address per line. Unread mail from any of these triggers the notification.</p>
+    <form method="post">
+        <textarea name="senders" rows="8" style="display:block;width:100%;margin:22px 0;padding:12px;border:1px solid var(--line);border-radius:8px;font:inherit">{{ senders|join('\n') }}</textarea>
+        <h2>Optional responses</h2>
+        <p class="muted">One short sentence per line. Sent to the ESP together with the latest new mail. Leave empty for none.</p>
+        <textarea name="responses" rows="6" style="display:block;width:100%;margin:22px 0;padding:12px;border:1px solid var(--line);border-radius:8px;font:inherit">{{ responses|join('\n') }}</textarea>
+        <button class="button primary" type="submit">Save <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i></button>
+    </form>
+</section>
+{% endblock %}

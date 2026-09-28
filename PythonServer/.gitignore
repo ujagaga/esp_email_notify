@@ -1,5 +1,7 @@
 credentials.json
 token.json
-config.json
+config.py
 __pycache__/
-venv/
+.venv/
+senders.json
+responses.json

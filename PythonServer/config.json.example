@@ -1,5 +1,0 @@
-{
-  "device_key": "REPLACE-WITH-A-GENERATED-GUID",
-  "senders": ["someone@example.com"],
-  "port": 5000
-}
