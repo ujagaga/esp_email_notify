@@ -17,10 +17,10 @@
 #define DISCOVERY_PORT 5001
 
 // How often to ask the server for new mail, in ms.
-#define UPDATE_TIMEOUT 10000
+#define UPDATE_TIMEOUT 60000
 
 // Nokia 5110 contrast, tune for your module (typically 40-70).
-#define LCD_CONTRAST 60
+#define LCD_CONTRAST 65
 
 
 #endif

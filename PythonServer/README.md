@@ -19,6 +19,10 @@ reports it to the ESP8266, which is just a display/beep drone.
      `email_check?` to it gets the reply `email_check:<PORT>` from the server's IP.
 3. Install dependencies: `pip install -r requirements.txt`
 4. Run the server: `python app.py`
+
+   Or run `./install.sh` instead of steps 3 and 4: it creates `.venv`, installs
+   the packages and sets up the `email-notify-server` systemd service, which
+   starts `run_server.sh` on boot.
 5. Open `<server-url>` in a browser and sign in with `ADMIN_EMAIL`. This saves
    `token.json` (with a refresh token), after which the server runs unattended.
    While signed in, the page shows the current mail status.
