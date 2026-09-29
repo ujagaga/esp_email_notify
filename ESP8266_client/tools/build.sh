@@ -13,7 +13,7 @@ cd $SCRIPT_DIR
 rm -rf ../build
 
 
-echo "Building relay_esp8266"
+echo "Building ESP8266_client"
 /usr/local/bin/arduino-cli compile --fqbn esp8266:esp8266:nodemcuv2 \
 --build-path ../build \
 ..

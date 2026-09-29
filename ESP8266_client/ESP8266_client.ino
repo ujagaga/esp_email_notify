@@ -10,9 +10,7 @@
 #include "config.h"
 #include "http_client.h"
 #include "http_server.h"
-#include "mqtt.h"
-#include "pinctrl.h"
-#include "web_socket.h"
+#include "ui.h"
 #include "wifi_connection.h"
 
 static String statusMessage =
@@ -27,24 +25,17 @@ void setup(void) {
    * gpio.*/
   delay(100);
   Serial.begin(115200);
-  // ESP.eraseConfig();
-  PINCTRL_init();
+  UI_init();
   WIFIC_init();
-  WS_init();
   HTTP_SERVER_init();
 }
 
 void loop(void) {
   if (WIFIC_isApMode()) {
     HTTP_SERVER_process();
-    WS_process();
-  } else {
-    HTTP_CLIENT_process();
-#ifdef USE_MQTT
-    MQTT_process();
-#endif
   }
+  HTTP_CLIENT_process(); /* Does nothing until STA is connected */
 
   WIFIC_process();
-  PINCTRL_process();
+  UI_process();
 }

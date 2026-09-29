@@ -9,7 +9,7 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, ses
 from config import ADMIN_EMAIL, DEVICE_KEY, DISCOVERY_PORT, PORT
 from gmail_auth import oauth, save_token
 from mail_checker import (check_unread, get_notified, get_responses, get_senders, save_notified,
-                          save_responses, save_senders, send_mail)
+                          reply_mail, save_responses, save_senders)
 
 app = Flask(__name__)
 app.secret_key = DEVICE_KEY  # stable across processes, so the OAuth session survives under CGI
@@ -53,6 +53,10 @@ def config_page():
     return render_template("config.html", email=email, senders=get_senders(), responses=get_responses())
 
 
+# The Nokia 5110 font has no Serbian letters
+SERBIAN_TO_ASCII = str.maketrans("čćšžđČĆŠŽĐ", "ccszdCCSZD")
+
+
 @app.route("/check")
 def check():
     key = request.headers.get("X-Api-Key", "")
@@ -68,6 +72,9 @@ def check():
     ids = status.pop("ids")
     status["beep"] = bool(set(ids) - set(get_notified()))
     save_notified(ids)
+    status["message"] = status["message"].translate(SERBIAN_TO_ASCII)
+    if "responses" in status:
+        status["responses"] = [r.translate(SERBIAN_TO_ASCII) for r in status["responses"]]
     return jsonify(status)
 
 
@@ -77,12 +84,12 @@ def send():
     if not secrets.compare_digest(key, DEVICE_KEY):
         return jsonify({"error": "unauthorized"}), 401
 
-    to, text = request.form.get("to", "").strip(), request.form.get("text", "").strip()
-    if not to or not text:
-        return jsonify({"error": "'to' and 'text' are required"}), 400
+    msg_id, text = request.form.get("id", "").strip(), request.form.get("text", "").strip()
+    if not msg_id or not text:
+        return jsonify({"error": "'id' and 'text' are required"}), 400
 
     try:
-        send_mail(to, text)
+        reply_mail(msg_id, text)
     except Exception as e:
         return jsonify({"error": str(e)}), 503
     return jsonify({"ok": True})

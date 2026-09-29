@@ -79,16 +79,31 @@ def check_unread():
     prefix = f"{count} new" if count > 1 else "New mail"
 
     return {"message": f"{prefix} - {sender}: {subject}", "responses": get_responses(),
-            "ids": [m["id"] for m in messages]}
+            "id": messages[0]["id"], "ids": [m["id"] for m in messages]}
 
 
-def send_mail(to, text):
+def reply_mail(msg_id, text):
+    """Reply to message msg_id in its thread, then mark it as read."""
+    headers = {"Authorization": f"Bearer {get_access_token()}"}
+    resp = requests.get(f"{GMAIL_URL}/{msg_id}", headers=headers, params={
+        "format": "metadata", "metadataHeaders": ["From", "Subject", "Message-ID"]
+    })
+    resp.raise_for_status()
+    original = resp.json()
+    orig_headers = {h["name"].lower(): h["value"] for h in original["payload"]["headers"]}
+    subject = orig_headers.get("subject", "")
+
     msg = EmailMessage()
-    msg["To"] = to
-    msg["Subject"] = text
+    msg["To"] = orig_headers["from"]
+    msg["Subject"] = subject if subject.lower().startswith("re:") else f"Re: {subject}"
+    if "message-id" in orig_headers:
+        msg["In-Reply-To"] = orig_headers["message-id"]
+        msg["References"] = orig_headers["message-id"]
     msg.set_content(text)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
 
-    resp = requests.post(f"{GMAIL_URL}/send", headers={"Authorization": f"Bearer {get_access_token()}"},
-                         json={"raw": raw})
+    resp = requests.post(f"{GMAIL_URL}/send", headers=headers, json={"raw": raw, "threadId": original["threadId"]})
+    resp.raise_for_status()
+
+    resp = requests.post(f"{GMAIL_URL}/{msg_id}/modify", headers=headers, json={"removeLabelIds": ["UNREAD"]})
     resp.raise_for_status()

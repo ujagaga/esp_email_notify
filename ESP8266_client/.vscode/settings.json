@@ -2,13 +2,6 @@
     "files.autoSave": "onFocusChange",
     "quickCommandButtons.buttons": [
         {
-            "color": "#FFD700",
-            "command": "claude",
-            "insertOnly": false,
-            "name": "$(robot) Claude",
-            "useVsCodeApi": false
-        },
-        {
             "color": "#8BC34A",
             "command": "./tools/build.sh",
             "insertOnly": false,

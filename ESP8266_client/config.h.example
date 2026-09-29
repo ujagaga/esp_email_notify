@@ -2,11 +2,25 @@
 #define CONFIG_H
 
 
-// After this period since startup, try to connect as wifi client. This is
-// to make sure it is not too frequent after a reset, so the router lease is
-// updated.
-#define AP_MODE_TIMEOUT_S 30
+// Keep the setup access point (AP+STA) for at least this long after startup.
+// After that, switch to STA only once connected and no AP clients are left.
+#define AP_MODE_TIMEOUT_S 300
 
+// Setup access point SSID. Password must be 8+ chars.
+#define AP_NAME "EmailNotify"
+#define PASSWORD "emailnotify"
+
+// Must match DEVICE_KEY in the server's config.py
+#define DEVICE_KEY "REPLACE-WITH-THE-SERVER-DEVICE-KEY"
+
+// Must match DISCOVERY_PORT in the server's config.py
+#define DISCOVERY_PORT 5001
+
+// How often to ask the server for new mail, in ms.
+#define UPDATE_TIMEOUT 10000
+
+// Nokia 5110 contrast, tune for your module (typically 40-70).
+#define LCD_CONTRAST 60
 
 
 #endif

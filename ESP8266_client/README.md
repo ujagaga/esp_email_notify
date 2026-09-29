@@ -61,12 +61,27 @@ Free pins for later use: D0, RX, TX, A0.
   Button 2 ---- D4 (D1 mini)
 ```
 
-## Planned behaviour
+## Setup
 
-- Periodically poll the mailbox for unread messages.
-- Filter unread messages to a configured list of sender addresses.
-- On a match, show the sender/subject on the Nokia 5110 LCD.
-- Sound a short beep pattern on the piezo speaker.
+1. `tools/install_dependencies.sh`
+2. Copy `config.h.example` to `config.h` and set `DEVICE_KEY` to the server's
+   `DEVICE_KEY` (see `PythonServer/config.py`).
+3. Build and flash: `tools/build.sh`, `tools/upload_usb.sh`
+4. On first start, connect to the WiFi AP shown on the LCD
+   (`AP_NAME` from `config.h`, password `PASSWORD`), open `http://192.168.4.1`
+   and save your network. The device restarts and joins it.
 
-Firmware details (mail provider/API, polling interval, config options) will be
-added once the hardware is wired up and tested.
+After every start the setup AP stays up for `AP_MODE_TIMEOUT_S` (5 min) in
+AP+STA mode. After that the device switches to STA only once no one is
+connected to the AP.
+
+## Behaviour
+
+- Finds the server by broadcasting `email_check?` to UDP `DISCOVERY_PORT`, and
+  looks again if the server stops answering.
+- Polls the server's `/check` every `UPDATE_TIMEOUT` ms and shows the result on
+  the LCD. New mail plays a short 3-tone beep.
+- **Button 1 (D3)** cycles through the server's responses, shown inverted at
+  the bottom of the LCD.
+- **Button 2 (D4)** sends the selected response as a reply to the shown mail,
+  which is then marked read.

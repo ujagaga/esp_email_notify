@@ -4,8 +4,7 @@ import time
 
 from oauth import ManualGoogleOAuth
 
-SCOPE = ("https://www.googleapis.com/auth/gmail.readonly "
-         "https://www.googleapis.com/auth/gmail.send")
+SCOPE = "https://www.googleapis.com/auth/gmail.modify"  # read, send and mark as read
 BASE_DIR = os.path.dirname(__file__)
 CREDENTIALS_FILE = os.path.join(BASE_DIR, "credentials.json")
 TOKEN_FILE = os.path.join(BASE_DIR, "token.json")

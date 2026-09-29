@@ -29,19 +29,20 @@ reports it to the ESP8266, which is just a display/beep drone.
 
 Response:
 ```json
-{"beep": true, "message": "New mail - Alice: Meeting notes", "responses": ["On my way", "Call you later"]}
+{"beep": true, "message": "New mail - Alice: Meeting notes", "id": "18c2f...", "responses": ["On my way", "Call you later"]}
 ```
 
 `beep` is `true` only when the reply contains unread mail that was not in the
-previous `/check` reply, so the ESP beeps once per new message. `responses`
-(edited on the `/config` page) is only present when there is unread mail.
+previous `/check` reply, so the ESP beeps once per new message. `id` (the
+latest unread message) and `responses` (edited on the `/config` page) are only
+present when there is unread mail.
 
-`POST /send`, header `X-Api-Key: <device_key>`, form fields `to` (recipient
-address) and `text` (used as both subject and body). Sends from the
-`ADMIN_EMAIL` Gmail account.
+`POST /send`, header `X-Api-Key: <device_key>`, form fields `id` (message id
+from `/check`) and `text` (reply body). Replies to that message's sender in the
+same thread from the `ADMIN_EMAIL` Gmail account, then marks the message read.
 
 ```bash
-curl -H "X-Api-Key: <device_key>" --data-urlencode "to=alice@example.com" \
+curl -H "X-Api-Key: <device_key>" --data-urlencode "id=18c2f..." \
      --data-urlencode "text=On my way" <server-url>/send
 ```
 

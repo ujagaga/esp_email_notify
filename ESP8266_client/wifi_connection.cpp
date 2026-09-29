@@ -5,19 +5,20 @@
  *  WiFi connection module.
  */
 #include "config.h"
+#include "ui.h"
 #include <ESP8266WiFi.h>
-#include <ESP_EEPROM.h>
+#include <Preferences.h>
 #include <lwip/dns.h>
 #include <lwip/init.h>
 #include <lwip/ip_addr.h>
 
 static char mySsidName[32] = {0}; /* Array to form AP name based on read MAC */
 static char deviceName[32] = {0};
-static char st_ssid[SSID_SIZE] = {0}; /* SSID to connect to */
-static char st_pass[WIFI_PASS_SIZE];  /* Password for the requested SSID */
+static String st_ssid = ""; /* SSID to connect to */
+static String st_pass = ""; /* Password for the requested SSID */
 static unsigned long connectionTimeoutCheck = 0;
 static IPAddress stationIP;
-static IPAddress apIP(192, 168, 1, 1);
+static IPAddress apIP(192, 168, 4, 1); /* Not 192.168.1.x, that is a common LAN range */
 static bool apMode = false;
 static uint32_t apModeAttempTime = 0;
 static IPAddress dns(8, 8, 8, 8);
@@ -69,7 +70,7 @@ void WIFIC_APMode(void) {
   macAddr.replace(":", "");
   macAddr.toCharArray(deviceName, sizeof(deviceName));
 
-  String ApName = AP_NAME_PREFIX + macAddr;
+  String ApName = AP_NAME;
   ApName.toCharArray(mySsidName, ApName.length() + 1);
 
   WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
@@ -78,6 +79,7 @@ void WIFIC_APMode(void) {
     wifi_statusMessage = "Running in AP mode. SSID: " + String(mySsidName) +
                          ", IP:" + apIP.toString();
     apMode = true;
+    UI_showText("WiFi setup\nAP: " + String(mySsidName) + "\nPass: " + PASSWORD + "\n" + apIP.toString());
   } else {
     wifi_statusMessage = "Failed to switch to AP mode.";
   }
@@ -87,7 +89,7 @@ void WIFIC_APMode(void) {
 }
 
 void WIFIC_stationMode(void) {
-  Serial.printf("\n\nTrying STA mode with [%s] and [%s]\r\n", st_ssid, st_pass);
+  Serial.printf("\n\nTrying STA mode with [%s] and [%s]\r\n", st_ssid.c_str(), st_pass.c_str());
 
   bool useStaticIp = checkValidIp(stationIP);
   if (useStaticIp) {
@@ -99,19 +101,53 @@ void WIFIC_stationMode(void) {
     WiFi.config(0U, 0U, 0U); // This disables static config.
   }
 
-  WiFi.begin(st_ssid, st_pass);
+  /* Does not wait, so the setup page stays usable. The SDK keeps retrying. */
+  WiFi.begin(st_ssid.c_str(), st_pass.c_str());
+}
 
-  /* set timeout to 30 seconds*/
-  int i = 30;
-  while ((i > 0) && (WiFi.status() != WL_CONNECTED)) {
-    delay(1000);
-    ESP.wdtFeed();
-    i--;
-    Serial.print(".");
+String WIFIC_getStSSID(void) { return st_ssid; }
+
+void WIFIC_setStSSID(String new_ssid) {
+  Preferences prefs;
+  prefs.begin("wifi");
+  prefs.putString("ssid", new_ssid);
+  prefs.end();
+  st_ssid = new_ssid;
+}
+
+String WIFIC_getStPass(void) { return st_pass; }
+
+void WIFIC_setStPass(String new_pass) {
+  Preferences prefs;
+  prefs.begin("wifi");
+  prefs.putString("pass", new_pass);
+  prefs.end();
+  st_pass = new_pass;
+}
+
+IPAddress WIFIC_getStIP(void) { return stationIP; }
+
+void WIFIC_init(void) {
+  ESP.wdtFeed();
+  Preferences prefs;
+  prefs.begin("wifi", true);
+  st_ssid = prefs.getString("ssid", "");
+  st_pass = prefs.getString("pass", "");
+  prefs.end();
+
+  WIFIC_APMode();
+  if (st_ssid.length() > 0) {
+    WIFIC_stationMode(); /* AP+STA */
   }
-  Serial.println("");
+}
 
-  if (WiFi.status() == WL_CONNECTED) {
+void WIFIC_process(void) {
+  static unsigned long lastCheckTime = 0;
+  static bool wasConnected = false;
+  const unsigned long checkInterval = 5000; // 5 seconds
+
+  bool connected = WiFi.status() == WL_CONNECTED;
+  if (connected && !wasConnected) {
     stationIP = WiFi.localIP();
     IPAddress gateway = WiFi.gatewayIP();
     // force dns server
@@ -121,79 +157,8 @@ void WIFIC_stationMode(void) {
 
     Serial.printf("IP address: %s, gateway: %s \n",
                   stationIP.toString().c_str(), gateway.toString().c_str());
-  } else {
-    WIFIC_APMode();
   }
-}
-
-String WIFIC_getStSSID(void) { return String(st_ssid); }
-
-void WIFIC_setStSSID(String new_ssid) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  uint16_t addr;
-
-  for (addr = 0; addr < new_ssid.length(); addr++) {
-    EEPROM.put(addr + SSID_EEPROM_ADDR, new_ssid[addr]);
-    st_ssid[addr] = new_ssid[addr];
-  }
-  EEPROM.put(addr + SSID_EEPROM_ADDR, 0);
-  st_ssid[addr] = 0;
-
-  EEPROM.commit();
-}
-
-String WIFIC_getStPass(void) { return String(st_pass); }
-
-void WIFIC_setStPass(String new_pass) {
-  EEPROM.begin(EEPROM_SIZE);
-
-  uint16_t addr;
-  for (addr = 0; addr < new_pass.length(); addr++) {
-    EEPROM.put(addr + WIFI_PASS_EEPROM_ADDR, new_pass[addr]);
-    st_pass[addr] = new_pass[addr];
-  }
-  EEPROM.put(addr + WIFI_PASS_EEPROM_ADDR, 0);
-  st_pass[addr] = 0;
-
-  EEPROM.commit();
-}
-
-IPAddress WIFIC_getStIP(void) { return stationIP; }
-
-void WIFIC_init(void) {
-  ESP.wdtFeed();
-  /* Read settings from EEPROM */
-  EEPROM.begin(EEPROM_SIZE);
-  uint16_t i = 0;
-
-  do {
-    EEPROM.get(i + WIFI_PASS_EEPROM_ADDR, st_pass[i]);
-    if ((st_pass[i] < 32) || (st_pass[i] > 126)) {
-      /* Non printable character */
-      break;
-    }
-    i++;
-  } while (i < WIFI_PASS_SIZE);
-  st_pass[i] = 0;
-
-  i = 0;
-  do {
-    EEPROM.get(i + SSID_EEPROM_ADDR, st_ssid[i]);
-    if ((st_ssid[i] < 32) || (st_ssid[i] > 126)) {
-      /* Non printable character */
-      break;
-    }
-    i++;
-  } while (i < SSID_SIZE);
-  st_ssid[i] = 0;
-
-  WIFIC_APMode();
-}
-
-void WIFIC_process(void) {
-  static unsigned long lastCheckTime = 0;
-  const unsigned long checkInterval = 5000; // 5 seconds
+  wasConnected = connected;
 
   if (!apMode) {
     return;
@@ -201,8 +166,8 @@ void WIFIC_process(void) {
 
   unsigned long now = millis();
 
-  // Don't attempt a STA connection until AP_MODE_TIMEOUT_S has passed since
-  // startup/reset, so the router lease is not renewed too frequently.
+  // Keep the AP for AP_MODE_TIMEOUT_S after startup, so there is time to
+  // connect to it and change settings.
   if ((now - apModeAttempTime) < (AP_MODE_TIMEOUT_S * 1000)) {
     return;
   }
@@ -212,10 +177,7 @@ void WIFIC_process(void) {
   }
   lastCheckTime = now;
 
-  if (WiFi.status() != WL_CONNECTED) {
-    // Not connected yet: try now. This keeps the AP running, so we end up
-    // in AP+STA mode.
-    WIFIC_stationMode();
+  if (!connected) {
     return;
   }
 

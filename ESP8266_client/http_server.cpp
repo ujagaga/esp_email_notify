@@ -9,8 +9,7 @@
 #include <pgmspace.h>
 #include "wifi_connection.h"
 #include "config.h"
-#include "relay_esp8266.h"
-#include "pinctrl.h"
+#include "ESP8266_client.h"
 
 
 /* If we were writing HTML files, this would be the content. Here we use char arrays. */
@@ -19,7 +18,7 @@ static const char HTML_BEGIN[] PROGMEM = R"(
 <html>
   <head>
     <meta name = "viewport" content = "width = device-width, initial-scale = 1.0, maximum-scale = 1.0, user-scalable=0">
-    <title>WiFi Gate</title>
+    <title>Email Notify</title>
     <style>
       body { background-color: white; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }
       .contain{width: 100%;}
@@ -30,32 +29,6 @@ static const char HTML_BEGIN[] PROGMEM = R"(
 )";
 
 static const char HTML_END[] PROGMEM = "</body></html>";
-
-static const char INDEX_HTML_0[] PROGMEM = R"(
-<style>
-  .btn_b{border:0;border-radius:0.3rem;color:#fff;line-height:4rem;font-size:3rem;margin:1%;height:4rem;width:4rem;background-color:#1fa3ec;flex:1;}
-  .btn_cfg{border:0;border-radius:0.3rem;color:#fff;line-height:1.4rem;font-size:0.8rem;margin:1ch;height:2rem;width:10rem;background-color:#ff3300;}      
-  .row{display: flex;justify-content: space-between;align-items: center;}      
-</style>
-<div class="contain">
-  <div class="center_div">
-)";
-
-const char INDEX_HTML_1[] PROGMEM = R"(
-  </div>
-  <hr>
-  <p id='status'></p>  
-  <br>
-  <button class="btn_cfg" type="button" onclick="location.href='/selectap';">Configure wifi</button>
-  <br/>
-</div>
-<script>
-  function redirectTo(id) {
-    const timestamp = new Date().getTime();
-    location.href = `/trigger?id=${id}&t=${timestamp}`;
-  }
-</script>
-)";
 
 static const char APLIST_HTML_0[] PROGMEM = R"(
 <style>
@@ -95,14 +68,10 @@ static const char APLIST_HTML_2[] PROGMEM = R"(
     document.getElementById('p').focus();
   }
   
-  var cn=new WebSocket('ws://'+location.hostname+':81/');
-  cn.onopen=function(){
-    cn.send('{"APLIST":""}');
-  }
-  cn.onmessage=function(e){
-    var data=JSON.parse(e.data);
-    if(data.hasOwnProperty('APLIST')){
-      rsp=data.APLIST.split('|');
+  function refresh(){
+    document.getElementById('vm').innerHTML='Please wait...'
+    fetch('/aplist').then(r=>r.text()).then(function(list){
+      rsp=list.split('|');
       document.getElementById('vm').innerHTML='';
       for(var i=0;i<(rsp.length);i++){
         document.getElementById('vm').innerHTML+='<span>'+(i+1)+": </span><a href='#p' onclick='c(this)'>" + rsp[i] + '</a><br>';
@@ -110,12 +79,9 @@ static const char APLIST_HTML_2[] PROGMEM = R"(
       if(!document.getElementById('vm').innerHTML.replace(/\\s/g,'').length){
         document.getElementById('ttl').innerHTML='No networks found.'
       } 
-    }
-  };
-  function refresh(){
-    document.getElementById('vm').innerHTML='Please wait...'
-    cn.send('{"APLIST":""}');
-  } 
+    });
+  }
+  refresh();
 </script>
 )";
 
@@ -141,29 +107,8 @@ static const char REDIRECT_HTML[] PROGMEM = R"(
 /* Declaring a web server object. */
 ESP8266WebServer* webServer = nullptr;
 
-void showStartPage() { 
-  String response = FPSTR(HTML_BEGIN);
-  response += FPSTR(INDEX_HTML_0);
-  response += "<div class='row'>";
-  response += "<button class=\"btn_b\" type=\"button\" onclick=\"redirectTo(0)\"><</button>";
-  response += "<button class=\"btn_b\" type=\"button\" onclick=\"redirectTo(1)\">></button>";  
-  response += "<button class=\"btn_b\" type=\"button\" onclick=\"redirectTo(2)\">&frac12;</button>";  
-  response += "<button class=\"btn_b\" type=\"button\" onclick=\"redirectTo(3)\">x</button>"; 
-  response += "</div>";
-
-  response += FPSTR(INDEX_HTML_1); 
-  response += FPSTR(HTML_END);
-  webServer->send(200, "text/html", response);  
-}
-
-static void trigger(void){
-  if (webServer->hasArg("id")) {
-    String idStr = webServer->arg("id");
-    int id = idStr.toInt();
-
-    PINCTRL_trigger(id);    
-  }
-  showStartPage();  
+static void apList(void){
+  webServer->send(200, "text/plain", WIFIC_getApList());
 }
 
 static void showNotFound(void){
@@ -259,12 +204,11 @@ void HTTP_SERVER_init(void){
   }
   webServer = new ESP8266WebServer(80);
 
-  webServer->on("/", showStartPage);
+  webServer->on("/", selectAP);
   webServer->on("/favicon.ico", showNotFound);
-  webServer->on("/selectap", selectAP);
-  webServer->on("/trigger", trigger);
+  webServer->on("/aplist", apList);
   webServer->on("/wifisave", saveWiFi);
-  webServer->onNotFound(showStartPage);
+  webServer->onNotFound(selectAP);
   
   webServer->begin();
 }

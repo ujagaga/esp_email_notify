@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PROJECT_NAME="relay_esp8266"
+PROJECT_NAME="ESP8266_client"
 PYTHON="$HOME/.arduino15/packages/esp8266/tools/python3/3.7.2-post1/python3"
 ESP_TOOL="$HOME/.arduino15/packages/esp8266/hardware/esp8266/3.1.2/tools/esptool/esptool.py"
 
@@ -16,7 +16,7 @@ SCRIPT_DIR=$(dirname "${SCRIPT_PATH}")
 cd "${SCRIPT_DIR}"
 echo "Uploading from ../build"
 
-${PYTHON} ${ESP_TOOL} --chip esp8266 --port /dev/ttyACM0 --baud 460800 \
+${PYTHON} ${ESP_TOOL} --chip esp8266 --port /dev/ttyUSB0 --baud 460800 \
 --before default_reset --after hard_reset write_flash \
 --flash_mode dio --flash_freq 80m --flash_size detect \
 0x0 ../build/${PROJECT_NAME}.ino.bin

@@ -21,6 +21,5 @@ arduino-cli core install esp8266:esp8266
 
 # Install required libraries
 arduino-cli lib install "ArduinoJson"
-arduino-cli lib install "ESP_EEPROM"
-arduino-cli lib install "PubSubClient"
-arduino-cli lib install "WebSockets"
+arduino-cli lib install "Adafruit PCD8544 Nokia 5110 LCD library"
+arduino-cli lib install "Preferences"

@@ -1,102 +1,129 @@
 /*
  *  Author: Rada Berar
  *  email: ujagaga@gmail.com
+ *
+ *  Finds the server on the local network, polls it for new mail and sends
+ *  the selected response.
  */
 #include "config.h"
-#include "pinctrl.h"
-#include "wifi_connection.h"
+#include "ui.h"
 #include <ArduinoJson.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266httpUpdate.h>
-#include <WiFiClientSecure.h>
+#include <WiFiUdp.h>
+
+#define MAX_RESPONSES 8
 
 static unsigned long lastConnectAtemptTime = 0;
-static int fail_count = 0;
+static String serverUrl = ""; /* Empty until discovered */
 
-void reportDeviceRequest() {
-  if (WiFi.status() != WL_CONNECTED)
-    return;
+/* Broadcast "email_check?" and wait for "email_check:<port>" from the server */
+static void discoverServer(void) {
+  WiFiUDP udp;
+  udp.begin(DISCOVERY_PORT);
+  udp.beginPacket(IPAddress(255, 255, 255, 255), DISCOVERY_PORT);
+  udp.print("email_check?");
+  udp.endPacket();
 
-  HTTPClient http;
-  WiFiClientSecure client;
-  client.setInsecure(); // skip cert verification
-  String url = String("https://") + REPORT_URL +
-               "/device_report?name=" + WIFIC_getDeviceName();
-
-  http.begin(client, url);
-  int httpCode = http.GET();
-
-  if (httpCode > 0) {
-    fail_count = 0;
-    String response = http.getString();
-    response.trim();
-    Serial.print("HTTP RX:");
-    Serial.println(response);
-
-    if (response.startsWith("{")) {
-      StaticJsonDocument<256> doc;
-      if (deserializeJson(doc, response) == DeserializationError::Ok) {
-        const char *cmd = doc["command"];
-        if (cmd) {
-          if (strcmp(cmd, "unlock") == 0) {
-#ifndef USE_MQTT
-            int relay_id = doc["relay_id"] | 0;
-            PINCTRL_trigger(relay_id);
-#endif
-          } else if (strcmp(cmd, "update") == 0) {
-            const char *fw_path = doc["firmware"];
-            if (fw_path && strlen(fw_path) > 0) {
-              String fwUrl = String("https://") + REPORT_URL + String(fw_path);
-              http.end();
-              Serial.println("Starting OTA update from: " + fwUrl);
-
-              WiFiClientSecure updateClient;
-              updateClient.setInsecure();
-              updateClient.setBufferSizes(512, 512);
-              t_httpUpdate_return ret =
-                  ESPhttpUpdate.update(updateClient, fwUrl);
-
-              switch (ret) {
-              case HTTP_UPDATE_FAILED:
-                Serial.printf("OTA failed, error (%d): %s\n",
-                              ESPhttpUpdate.getLastError(),
-                              ESPhttpUpdate.getLastErrorString().c_str());
-                break;
-              case HTTP_UPDATE_NO_UPDATES:
-                Serial.println("No update available.");
-                break;
-              case HTTP_UPDATE_OK:
-                Serial.println("OTA OK, rebooting...");
-                break; // reboot happens automatically
-              }
-            }
-          } else if (strcmp(cmd, "restart") == 0) {
-#ifndef USE_MQTT
-            Serial.println("Restart command received.");
-            ESP.restart();
-#endif
-          }
-        }
+  unsigned long start = millis();
+  while ((millis() - start) < 1000) {
+    if (udp.parsePacket() > 0) {
+      String reply = udp.readString();
+      if (reply.startsWith("email_check:")) {
+        serverUrl = "http://" + udp.remoteIP().toString() + ":" + reply.substring(12);
+        Serial.println("Server found: " + serverUrl);
+        break;
       }
     }
-  } else {
-    Serial.printf("HTTP GET failed, error: %s\n",
-                  http.errorToString(httpCode).c_str());
-    fail_count++;
-    if (fail_count >= 2) {
-      Serial.println("2 failed reports in a row, restarting.");
-      ESP.restart();
+    delay(10);
+  }
+  udp.stop();
+}
+
+static void checkMail(void) {
+  WiFiClient client;
+  HTTPClient http;
+  http.begin(client, serverUrl + "/check");
+  http.addHeader("X-Api-Key", DEVICE_KEY);
+  int httpCode = http.GET();
+
+  if (httpCode <= 0) {
+    Serial.printf("HTTP GET failed, error: %s\n", http.errorToString(httpCode).c_str());
+    serverUrl = ""; /* Server may have moved, look for it again */
+    UI_showText("Server lost");
+    http.end();
+    return;
+  }
+
+  String response = http.getString();
+  http.end();
+  Serial.print("HTTP RX:");
+  Serial.println(response);
+
+  JsonDocument doc;
+  if (deserializeJson(doc, response) != DeserializationError::Ok) {
+    return;
+  }
+
+  String responses[MAX_RESPONSES];
+  int count = 0;
+  for (JsonVariant r : doc["responses"].as<JsonArray>()) {
+    if (count < MAX_RESPONSES) {
+      responses[count++] = r.as<String>();
     }
   }
 
+  UI_setMail(doc["id"] | "", doc["message"] | "", responses, count);
+  if (doc["beep"] | false) {
+    UI_beep();
+  }
+}
+
+static String urlEncode(String text) {
+  String encoded = "";
+  for (char c : text) {
+    if (isalnum(c) || (c == '-') || (c == '_') || (c == '.') || (c == '~')) {
+      encoded += c;
+    } else {
+      char hex[4];
+      snprintf(hex, sizeof(hex), "%%%02X", (uint8_t)c);
+      encoded += hex;
+    }
+  }
+  return encoded;
+}
+
+bool HTTP_CLIENT_send(String id, String text) {
+  if (serverUrl.length() == 0) {
+    return false;
+  }
+
+  WiFiClient client;
+  HTTPClient http;
+  http.begin(client, serverUrl + "/send");
+  http.addHeader("X-Api-Key", DEVICE_KEY);
+  http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+  int httpCode = http.POST("id=" + id + "&text=" + urlEncode(text));
   http.end();
-  lastConnectAtemptTime = millis();
+
+  lastConnectAtemptTime = 0; /* Check again right away */
+  return httpCode == 200;
 }
 
 void HTTP_CLIENT_process() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
   if (((millis() - lastConnectAtemptTime) > (UPDATE_TIMEOUT + random(100))) ||
       (lastConnectAtemptTime == 0)) {
-    reportDeviceRequest();
+    if (serverUrl.length() == 0) {
+      UI_showText("Looking for\nserver...");
+      discoverServer();
+    }
+    if (serverUrl.length() > 0) {
+      checkMail();
+    }
+    lastConnectAtemptTime = millis();
   }
 }
