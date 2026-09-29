@@ -15,6 +15,8 @@ reports it to the ESP8266, which is just a display/beep drone.
      `python -c "import uuid; print(uuid.uuid4())"`).
    - `SENDERS`: list of email addresses to watch for.
    - `ADMIN_EMAIL`: the Gmail account to check; the only one allowed to sign in.
+   - `DISCOVERY_PORT`: UDP port for finding the server. Broadcasting
+     `email_check?` to it gets the reply `email_check:<PORT>` from the server's IP.
 3. Install dependencies: `pip install -r requirements.txt`
 4. Run the server: `python app.py`
 5. Open `<server-url>` in a browser and sign in with `ADMIN_EMAIL`. This saves
